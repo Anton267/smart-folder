@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Cap Weight</title>
     <script src="https://code.highcharts.com/highcharts.js"></script>
 
 </head>
@@ -16,7 +16,8 @@
     <div style="margin-bottom: 10px;">
         <div style="display: flex; gap: 5px; align-items: flex-end;">
             <h5 style="margin-bottom: 0;">Test History</h5>
-            <button id="reset" style="padding: 0; line-height: 1;"><small>reset</small></button>
+            <button id="reset"
+                style="padding: 0; line-height: 1; display: flex; align-items: center;"><small>reset</small></button>
         </div>
         <div id="test-history"></div>
     </div>
@@ -28,14 +29,15 @@
     <br>
     <br>
     <div style="margin-bottom: 3px;">Settings</div>
-    <textarea name="" id="setting" cols="60" rows="10">
+    <textarea name="" id="setting" cols="60" rows="15">
         {
             "historyLimit": 100,
             "downGradeThreshold": 1.2,
+            "minWeight": 0.5,
             "lastRejectDownGrade": {
-                "1": 2,
-                "2": 22,
-                "3": 33
+                "1": 5,
+                "2": 10,
+                "3": 35
             },
             "randomThreshold": 2
         }
@@ -106,14 +108,15 @@
         }
         class Strategy {
             constructor(strategy = {
-                historyLimit: 100,
-                downGradeThreshold: 1.2,
-                lastRejectDownGrade: {
-                    1: 2,
-                    2: 22,
-                    3: 33,
+                "historyLimit": 100,
+                "downGradeThreshold": 1.2,
+                "minWeight": 0.5,
+                "lastRejectDownGrade": {
+                    "1": 5,
+                    "2": 10,
+                    "3": 35
                 },
-                randomThreshold: 2,
+                "randomThreshold": 2
             }) {
                 this.history = "";
                 this.strategy = strategy;
@@ -143,10 +146,10 @@
                         lastRejectDownGrade = this.strategy.lastRejectDownGrade[max];
                     }
                 }
-                const percent = ((rejectCount / (succesCount || 100)) * 100) * this.strategy.downGradeThreshold;
-                const percentage = +(percent.toFixed(3));
+                const percentage = +((((rejectCount / (succesCount || 100)) * 100) * this.strategy.downGradeThreshold).toFixed(3));
                 const lastRejectDownGradePercentage = +(((lastRejectDownGrade / percentage) * 100) || 0).toFixed(3);
-                const TOTAL = percentage + lastRejectDownGradePercentage;
+                const min = Math.max(this.strategy.minWeight, 0.1);
+                const total = Math.min(percentage + lastRejectDownGradePercentage, 100 - min);
                 return {
                     succesCount,
                     rejectCount,
@@ -154,7 +157,8 @@
                     lastRejectDownGrade,
                     percentage: -percentage,
                     lastRejectDownGradePercentage: -lastRejectDownGradePercentage,
-                    TOTAL: -TOTAL,
+                    TOTAL: -total,
+                    [`max distance between weight 100 and ${min}`]: (+(100 / min).toFixed(3) + " leads"),
                 }
             }
 
@@ -188,8 +192,7 @@
                     if (!historyAcc) {
                         continue;
                     }
-                    let t = 100 + this.getRaiting(historyAcc).TOTAL;
-                    t = +(t < 0 ? 0 : t).toFixed(3);
+                    const t = 100 + this.getRaiting(historyAcc).TOTAL;
                     acc.push(t);
                 }
                 showChart(acc, result, this.history);
