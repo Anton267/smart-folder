@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+
+</head>
+
+<body>
+
+    <div id="container"></div>
+    <div style="margin-bottom: 10px;">
+        <div style="display: flex; gap: 5px; align-items: flex-end;">
+            <h5 style="margin-bottom: 0;">Test History</h5>
+            <button id="reset" style="padding: 0; line-height: 1;"><small>reset</small></button>
+        </div>
+        <div id="test-history"></div>
+    </div>
+    <div style="margin-bottom: 3px;">History</div>
+    <div style="display: flex; gap: 5px; align-items: flex-end;">
+        <textarea name="" id="history" cols="140" rows="1"></textarea>
+        <button id="submit">Submit</button>
+    </div>
+    <br>
+    <br>
+    <div style="margin-bottom: 3px;">Settings</div>
+    <textarea name="" id="setting" cols="60" rows="10">
+        {
+            "historyLimit": 100,
+            "downGradeThreshold": 1.2,
+            "lastRejectDownGrade": {
+                "1": 2,
+                "2": 22,
+                "3": 33
+            },
+            "randomThreshold": 2
+        }
+    </textarea>
+    <br>
+    <button id="execute">Random Test</button>
+
+    <script>
+        const testHistory = document.getElementById("test-history");
+        const series = [];
+        const colors = ['#2617D8B0', '#F70F0FB0', '#0FD8BBB0', '#09BCFAB0', '#FFA640B0', '#125e5f', '#20dacc'];
+        const showChart = (values, result, history) => {
+            const color = colors[series.length];
+            const h = [...history].map((item, i) => `<span title="${i + 1}">${item}</span>`).join("");
+            testHistory.insertAdjacentHTML("beforeend", `<div style="color: ${color};">${h}<small style="margin-left: 5px;">${result.succesCount} / ${result.rejectCount}</small></div>`);
+            series.push({
+                data: values.map((y, i) => ({
+                    name: "push: " + (i + 1),
+                    y
+                })),
+                name: "Test " + (series.length + 1),
+                description: values,
+                color,
+            });
+            Highcharts.chart('container', {
+                chart: {
+                    type: 'area'
+                },
+                title: {
+                    text: 'Down Grade Cap %',
+                    align: 'left'
+                },
+                subtitle: {
+                    useHTML: true,
+                    text: `<pre>${JSON.stringify(result, null, 2)}</pre><br>`,
+                    align: 'left'
+                },
+                yAxis: {
+                    min: 0,
+                    max: 100,
+                    labels: {
+                        // enabled: false
+                    },
+                    title: {
+                        text: "Cap raiting"
+                    },
+                },
+                // tooltip: { enabled: false },
+                plotOptions: {
+                    column: {
+                        pointPadding: 0.2,
+                        borderWidth: 0
+                    },
+                    area: {
+                        marker: {
+                            enabled: false
+                        },
+                    }
+                },
+                series,
+                // series: [
+                //     // {
+                //     //     data: values.split("").map((item) => item * 10),
+                //     //     name: "Try to Push"
+                //     // }
+                // ]
+            });
+        }
+        class Strategy {
+            constructor(strategy = {
+                historyLimit: 100,
+                downGradeThreshold: 1.2,
+                lastRejectDownGrade: {
+                    1: 2,
+                    2: 22,
+                    3: 33,
+                },
+                randomThreshold: 2,
+            }) {
+                this.history = "";
+                this.strategy = strategy;
+            }
+
+            getRaiting(history = this.history) {
+                let succesCount = 0;
+                let rejectCount = 0;
+                let lastRejectCount = 0;
+                for (let i = history.length - 1; i >= 0; i--) {
+                    const result = history[i];
+                    if (result === "1") {
+                        succesCount++;
+                        continue;
+                    }
+                    rejectCount++;
+                    if (!succesCount) {
+                        lastRejectCount++;
+                    }
+                }
+                let lastRejectDownGrade = 0;
+                if (lastRejectCount) {
+                    if (typeof this.strategy.lastRejectDownGrade[lastRejectCount] === "number") {
+                        lastRejectDownGrade = this.strategy.lastRejectDownGrade[lastRejectCount];
+                    } else {
+                        const max = Math.max(...Object.keys(this.strategy.lastRejectDownGrade));
+                        lastRejectDownGrade = this.strategy.lastRejectDownGrade[max];
+                    }
+                }
+                const percent = ((rejectCount / (succesCount || 100)) * 100) * this.strategy.downGradeThreshold;
+                const percentage = +(percent.toFixed(3));
+                const lastRejectDownGradePercentage = +(((lastRejectDownGrade / percentage) * 100) || 0).toFixed(3);
+                const TOTAL = percentage + lastRejectDownGradePercentage;
+                return {
+                    succesCount,
+                    rejectCount,
+                    lastRejectCount,
+                    lastRejectDownGrade,
+                    percentage: -percentage,
+                    lastRejectDownGradePercentage: -lastRejectDownGradePercentage,
+                    TOTAL: -TOTAL,
+                }
+            }
+
+            // hit(value) {
+            //     this.history += value;
+            //     this.history = this.history.slice(
+            //         -this.strategy.historyLimit,
+            //         this.history.length
+            //     );
+            // }
+
+            randomHits(n) {
+                while (n) {
+                    const rand = Math.floor(Math.random() * 10);
+                    const result = rand < this.strategy.randomThreshold ? 0 : 1;
+                    this.history += result;
+                    this.history = this.history.slice(
+                        -this.strategy.historyLimit,
+                        this.history.length
+                    );
+                    n--;
+                }
+            }
+
+            showChart(result) {
+                // showChart(this.history, result);
+                const acc = [];
+                let historyAcc = "";
+                for (const result of this.history) {
+                    historyAcc += result;
+                    if (!historyAcc) {
+                        continue;
+                    }
+                    let t = 100 + this.getRaiting(historyAcc).TOTAL;
+                    t = +(t < 0 ? 0 : t).toFixed(3);
+                    acc.push(t);
+                }
+                showChart(acc, result, this.history);
+            }
+
+            setHistory(history) {
+                for (const result of history) {
+                    switch (result) {
+                        case '0':
+                        case '1':
+                            continue;
+                        default:
+                            alert("History shoud be 1 or 0");
+                            return;
+                    }
+                }
+                this.history = history.slice(
+                    -this.strategy.historyLimit,
+                    history.length
+                );
+            }
+        }
+
+        const execute = (history) => {
+            const setting = document.getElementById("setting").value;
+            try {
+                JSON.parse(setting)
+            } catch (error) {
+                alert("Invalid JSON\n\n" + error);
+                return;
+            }
+            try {
+                const parse = JSON.parse(setting);
+                const x = new Strategy(parse);
+                if (history) {
+                    x.setHistory(history);
+                } else {
+                    x.randomHits(parse.historyLimit);
+                }
+                const result = x.getRaiting();
+                x.showChart(result);
+                document.getElementById("history").value = x.history;
+            } catch (error) {
+                alert(error);
+                console.error(error);
+            }
+        };
+
+        execute();
+        document.getElementById("execute").addEventListener(("click"), () => {
+            execute();
+        });
+        document.getElementById("submit").addEventListener("click", (event) => {
+            execute(document.getElementById("history").value);
+        });
+
+        document.getElementById("reset").addEventListener("click", () => {
+            series.length = 0;
+            testHistory.innerHTML = "";
+            execute();
+        });
+    </script>
+</body>
+
+</html>
